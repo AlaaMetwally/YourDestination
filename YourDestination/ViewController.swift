@@ -83,11 +83,10 @@ class ViewController: UIViewController, GMSMapViewDelegate, NSFetchedResultsCont
                     print("Current Place error: \(error.localizedDescription)")
                     return
                 }
-     
+                
                 if let placeLikelihoodList = placeLikelihoodList {
                     let place = placeLikelihoodList.likelihoods.first?.place
                     if let place = place {
-                        
                         let fetchRequest: NSFetchRequest<Place> = Place.fetchRequest()
                         let predicate = NSPredicate(format: "place_id == %@", "\(place.placeID!)")
                         fetchRequest.predicate = predicate

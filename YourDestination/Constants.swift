@@ -9,7 +9,6 @@
 import Foundation
 
 struct Constants{
-//?query=Lawson+Jebl+Akihabara+Square+Shop&location=35.701373,139.774786&key=AIzaSyCUv6toYbNQ5QD23aLS4GVmAiHy8i361Mc
     struct Destination {
         static let APIScheme = "https"
         static let APIHost = "maps.googleapis.com"
@@ -29,7 +28,7 @@ struct Constants{
     }
     
     struct GetIconParameterValues{
-        static let APIKey = "AIzaSyC6WcSFzYtaIflWjd-ZwFnMbU1OV_H6Yao"
+        static let APIKey = "AIzaSyCS0BOTvvFk2o-buT3NZzsvP2CNIcPUc1U"
     }
     
     struct DestinationParameterKeys {
@@ -41,7 +40,7 @@ struct Constants{
     }
     
     struct DestinationParameterValues{
-        static let APIKey = "AIzaSyC6WcSFzYtaIflWjd-ZwFnMbU1OV_H6Yao"
+        static let APIKey = "AIzaSyCS0BOTvvFk2o-buT3NZzsvP2CNIcPUc1U"
         static let sensor = "true"
     }
     
