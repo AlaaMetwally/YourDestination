@@ -12,8 +12,9 @@ import CoreLocation
 import GoogleMaps
 import GooglePlaces
 import UserNotifications
+import CoreData
 
-class ViewController: UIViewController, GMSMapViewDelegate {
+class ViewController: UIViewController, GMSMapViewDelegate, NSFetchedResultsControllerDelegate{
     
     let locationManager = CLLocationManager()
     var mapView: GMSMapView!
@@ -23,7 +24,9 @@ class ViewController: UIViewController, GMSMapViewDelegate {
     let path = GMSMutablePath()
     var array: [[String:Any]] = []
     var destName: String = ""
-    
+    let dataController = DataController.shared
+    let fetchPlace = Place(context: DataController.shared.viewContext)
+
     override func viewDidLoad() {
         super.viewDidLoad()
         startUpdatingLocation()
@@ -62,6 +65,7 @@ class ViewController: UIViewController, GMSMapViewDelegate {
     }
     
     func placeConfiguration(){
+        
         DispatchQueue.main.async {
             let camera = GMSCameraPosition.camera(withLatitude: (self.locationManager.location?.coordinate.latitude)!, longitude:(self.locationManager.location?.coordinate.longitude)!, zoom: self.zoomLevel)
             self.mapView = GMSMapView.map(withFrame: self.view.bounds, camera: camera)
@@ -79,10 +83,45 @@ class ViewController: UIViewController, GMSMapViewDelegate {
                     print("Current Place error: \(error.localizedDescription)")
                     return
                 }
-                
+     
                 if let placeLikelihoodList = placeLikelihoodList {
                     let place = placeLikelihoodList.likelihoods.first?.place
                     if let place = place {
+                        
+                        let fetchRequest: NSFetchRequest<Place> = Place.fetchRequest()
+                        let predicate = NSPredicate(format: "place_id == %@", "\(place.placeID!)")
+                        fetchRequest.predicate = predicate
+                        guard let getPlace = (try? self.dataController.viewContext.fetch(fetchRequest).first)! else{
+                            
+                            var originalString = "\(place.name!)"
+                            originalString = originalString.replacingOccurrences(of: " ", with: "+")
+
+                            var methodParameters = [
+                                Constants.GetIconParameterKeys.APIKey : Constants.GetIconParameterValues.APIKey,
+                                Constants.GetIconParameterKeys.location : "\(place.coordinate.latitude),\(place.coordinate.longitude)",
+                                Constants.GetIconParameterKeys.query : originalString
+                                ] as [String : Any]
+                            
+                            let url = self.GetIconURLFromParameters(methodParameters as [String : AnyObject])
+                            let request = URLRequest(url: url)
+                            self.requestForIcon(request: request){ (results,error) in
+                                guard let photoMetadata: GMSPlacePhotoMetadata = place.photos?[0] else{
+                                    return
+                                }
+                                
+                                self.placesClient?.loadPlacePhoto(photoMetadata, callback: { (photo, error) -> Void in
+                                    
+                                    self.fetchPlace.latitude = (self.locationManager.location?.coordinate.latitude)!
+                                    self.fetchPlace.longitude = (self.locationManager.location?.coordinate.longitude)!
+                                    self.fetchPlace.place_id = place.placeID
+                                    self.fetchPlace.title = place.name
+                                    self.fetchPlace.desc = place.formattedAddress
+                                    self.fetchPlace.photo = photo
+                                    self.fetchPlace.icon = results!
+                                })
+                            }
+                            return
+                        }
                         DispatchQueue.main.async {
                             let location = CLLocationCoordinate2D(latitude: self.locationManager.location?.coordinate.latitude as! CLLocationDegrees, longitude: self.locationManager.location?.coordinate.longitude as!CLLocationDegrees)
                             let marker = GMSMarker(position: location)
@@ -94,6 +133,7 @@ class ViewController: UIViewController, GMSMapViewDelegate {
                 }
             })
             self.locationManagerConfiguration()
+            self.dataController.saveContext()
         }
     }
     
@@ -118,7 +158,6 @@ class ViewController: UIViewController, GMSMapViewDelegate {
                 let url = self.destinationURLFromParameters(methodParameters as [String : AnyObject])
                 let request = URLRequest(url: url)
                 self.requestHandler(request: request){ (results,error) in
-                    print(results)
                     var name = self.getDataFromRequest(results: results)
                     name = String(name.dropLast())
                      UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["notif"])
@@ -203,6 +242,15 @@ class ViewController: UIViewController, GMSMapViewDelegate {
                     print("there is no image")
                     return
             }
+
+            let fetchPlaces = Place(context: self.dataController.viewContext)
+            fetchPlaces.latitude = dest["lat"] as! Double
+            fetchPlaces.longitude = dest["lng"] as! Double
+            fetchPlaces.place_id = dest["place_id"] as! String
+            fetchPlaces.title = dest["name"] as! String
+            fetchPlaces.desc = dest["vicinity"] as! String
+            fetchPlaces.icon = dest["icon"] as! String
+            self.fetchPlace.places?.adding(fetchPlaces)
             
             DispatchQueue.main.async {
                 let location = CLLocationCoordinate2D(latitude: dest["lat"] as! CLLocationDegrees, longitude: dest["lng"] as!CLLocationDegrees)
@@ -213,6 +261,59 @@ class ViewController: UIViewController, GMSMapViewDelegate {
                 marker.map = self.mapView
             }
         }
+    }
+    
+    func requestForIcon(request: URLRequest,completionHandler handler:@escaping (_ result: String?,_ error: String?) -> Void){
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            func displayError(_ error: String) {
+                print(error)
+                handler(nil,error)
+            }
+            
+            /* GUARD: Was there an error? */
+            guard error == nil else {
+                displayError("There was an error with your request: \(error!)")
+                return
+            }
+            
+            /* GUARD: Did we get a successful 2XX response? */
+            guard let statusCode = (response as? HTTPURLResponse)?.statusCode, statusCode >= 200 && statusCode <= 299 else {
+                displayError("Your request returned a status code other than 2xx!")
+                return
+            }
+            
+            /* GUARD: Was there any data returned? */
+            guard let data = data else {
+                displayError("No data was returned by the request!")
+                return
+            }
+            
+            /* 5. Parse the data */
+            let parsedResult: [String:AnyObject]!
+            do {
+                parsedResult = try (JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String:AnyObject])
+            } catch {
+                displayError("Could not parse the data as JSON: '\(data)'")
+                return
+            }
+            
+            guard let destinations = parsedResult["results"] as? NSArray, destinations.count != 0   else{
+                displayError("Could not parse the parsed data as : '\(String(describing: parsedResult))'")
+                return
+            }
+    
+            guard let dict = destinations[0] as? NSDictionary else{
+                displayError("Could not parse the parsed data as : '\(String(describing: parsedResult))'")
+                return
+            }
+                
+            guard let icon =  dict["icon"] as? String else{
+                displayError("Could not parse the icon")
+                return
+            }
+            handler(icon, nil)
+        }
+        task.resume()
     }
     
     func requestHandler(request: URLRequest,completionHandler handler:@escaping (_ result: [[String:Any]]?,_ error: String?) -> Void){
@@ -316,6 +417,20 @@ class ViewController: UIViewController, GMSMapViewDelegate {
         components.scheme = Constants.Destination.APIScheme
         components.host = Constants.Destination.APIHost
         components.path = Constants.Destination.APIPath
+        components.queryItems = [URLQueryItem]()
+        
+        for (key, value) in parameters {
+            let queryItem = URLQueryItem(name: key, value: "\(value)")
+            components.queryItems!.append(queryItem)
+        }
+        return components.url!
+    }
+    
+    private func GetIconURLFromParameters(_ parameters: [String:AnyObject]) -> URL {
+        var components = URLComponents()
+        components.scheme = Constants.GetIcon.APIScheme
+        components.host = Constants.GetIcon.APIHost
+        components.path = Constants.GetIcon.APIPath
         components.queryItems = [URLQueryItem]()
         
         for (key, value) in parameters {

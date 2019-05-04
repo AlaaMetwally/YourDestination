@@ -9,11 +9,27 @@
 import Foundation
 
 struct Constants{
-    
+//?query=Lawson+Jebl+Akihabara+Square+Shop&location=35.701373,139.774786&key=AIzaSyCUv6toYbNQ5QD23aLS4GVmAiHy8i361Mc
     struct Destination {
         static let APIScheme = "https"
         static let APIHost = "maps.googleapis.com"
         static let APIPath = "/maps/api/place/nearbysearch/json"
+    }
+    
+    struct GetIcon {
+        static let APIScheme = "https"
+        static let APIHost = "maps.googleapis.com"
+        static let APIPath = "/maps/api/place/textsearch/json"
+    }
+    
+    struct GetIconParameterKeys {
+        static let APIKey = "key"
+        static let location = "location"
+        static let query = "query"
+    }
+    
+    struct GetIconParameterValues{
+        static let APIKey = "AIzaSyC6WcSFzYtaIflWjd-ZwFnMbU1OV_H6Yao"
     }
     
     struct DestinationParameterKeys {
@@ -25,12 +41,12 @@ struct Constants{
     }
     
     struct DestinationParameterValues{
-        static let APIKey = "AIzaSyCS0BOTvvFk2o-buT3NZzsvP2CNIcPUc1U"
+        static let APIKey = "AIzaSyC6WcSFzYtaIflWjd-ZwFnMbU1OV_H6Yao"
         static let sensor = "true"
     }
     
     enum Types: String, CaseIterable{
-        case mosque
+        case museum
         case bank
     }
     
